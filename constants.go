@@ -1,4 +1,4 @@
-package main
+package mqttproxy
 
 type MsgType byte
 

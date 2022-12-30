@@ -1,3 +1,3 @@
-module mqtt-proxy
+module github.com/dennistrukhin/mqttproxy
 
 go 1.19

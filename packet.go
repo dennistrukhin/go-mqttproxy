@@ -1,10 +1,10 @@
-package main
+package mqttproxy
 
 import (
 	"bytes"
 )
 
-type TopicFiler struct {
+type TopicFilter struct {
 	Name string
 	QoS  byte
 }
@@ -22,13 +22,23 @@ type ConnectPacket struct {
 }
 
 type SubscribePacket struct {
-	Id          uint16
-	TopicFilers []*TopicFiler
+	Id           uint16
+	TopicFilters []*TopicFilter
 }
 
 type PublishPacket struct {
 	Topic   string
 	Payload []byte
+}
+
+func (cnx *ConnectPacket) SetUsername(u string) {
+	cnx.Username = u
+	cnx.Flags |= 0x80
+}
+
+func (cnx *ConnectPacket) SetPassword(p string) {
+	cnx.Password = p
+	cnx.Flags |= 0x40
 }
 
 func (cnx *ConnectPacket) isWillFlag() bool {
@@ -57,17 +67,7 @@ func (cnx *ConnectPacket) GetBytes() []byte {
 
 	// В size получили remaining length для пакета connect, запишем её в заголовок
 	// Столько байтов использовано для remaining length
-	rlLen := 0
-	rlBytes := make([]byte, 4) // Вряд ли мы будем передавать больше 2Гб данных через брокера
-	s := size
-	for s > 0 {
-		rlBytes[rlLen] = byte(s & 0x7f) // записываем 7 бит от значения
-		s = s >> 7                      // готовим следующие 7 бит (если они есть) для записи в следующий байт на следующей итерации
-		if s > 0 {                      // если что-то осталось, то надо установить старший бит "продолжение размера"
-			rlBytes[rlLen] = rlBytes[rlLen] | 0x80
-		}
-		rlLen++ // увеличиваем количество записанных байт
-	}
+	rlLen, rlBytes := getRL(size)
 
 	buff := make([]byte, size+rlLen+1) // Размер сообщения + байты на сам размер + 1 байт на тип пакета
 	buff[0] = 0x10
@@ -104,18 +104,12 @@ func (cnx *ConnectPacket) GetBytes() []byte {
 func NewConnect(buff []byte) *ConnectPacket {
 	dump := bytes.NewBuffer(buff)
 
-	cnxMsg := ConnectPacket{}
-
-	// skip header
-	_, err := dump.ReadByte()
-	if err != nil {
-		return nil
-	}
-
-	// skip remaining len header
+	// Skip header and remaining length header
+	getByte(dump)
 	for getByte(dump)&0b1000000 != 0 {
 	}
 
+	cnxMsg := ConnectPacket{}
 	cnxMsg.ProtocolName = decodeString(dump)
 	cnxMsg.Version = getByte(dump)
 	cnxMsg.Flags = getByte(dump)
@@ -139,7 +133,7 @@ func NewConnect(buff []byte) *ConnectPacket {
 
 func NewSubscribe(payload []byte) *SubscribePacket {
 	s := &SubscribePacket{
-		TopicFilers: []*TopicFiler{},
+		TopicFilters: []*TopicFilter{},
 	}
 
 	// Пропустим заголовок и значение переменной длины
@@ -155,7 +149,7 @@ func NewSubscribe(payload []byte) *SubscribePacket {
 	for i < l {
 		tl := int(payload[i])<<8 + int(payload[i+1])
 		t := string(payload[i+2 : i+2+tl])
-		s.TopicFilers = append(s.TopicFilers, &TopicFiler{
+		s.TopicFilters = append(s.TopicFilters, &TopicFilter{
 			Name: t,
 			QoS:  payload[i+2+tl],
 		})
@@ -205,4 +199,18 @@ func putBytes(buff *[]byte, pos int, s string) int {
 	(*buff)[pos+1] = byte(l & 0xff)
 	copy((*buff)[pos+2:], s)
 	return 2 + l
+}
+
+func getRL(s int) (int, []byte) {
+	l := 0
+	b := make([]byte, 4) // Вряд ли мы будем передавать больше 2Гб данных через брокера
+	for s > 0 {
+		b[l] = byte(s & 0x7f) // записываем 7 бит от значения
+		s = s >> 7            // готовим следующие 7 бит (если они есть) для записи в следующий байт на следующей итерации
+		if s > 0 {            // если что-то осталось, то надо установить старший бит "продолжение размера"
+			b[l] = b[l] | 0x80
+		}
+		l++ // увеличиваем количество записанных байт
+	}
+	return l, b
 }

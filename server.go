@@ -1,6 +1,7 @@
-package main
+package mqttproxy
 
 import (
+	"context"
 	"net"
 )
 
@@ -10,8 +11,8 @@ type Mutator func(topic string, payload []byte) (bool, error)
 type Dumper func(b []byte)
 
 type ProxyServer struct {
-	listen        string
-	server        string
+	downstream    string
+	upstream      string
 	authenticator Authenticator
 	authorizer    Authorizer
 	pubMutator    Mutator
@@ -25,50 +26,74 @@ type MqttCreds struct {
 	psw  string
 }
 
-func NewProxyServer(listen string, server string) *ProxyServer {
+func New(downstream string, upstream string, options ...func(*ProxyServer)) *ProxyServer {
 	proxy := &ProxyServer{
-		listen: listen,
-		server: server,
+		downstream: downstream,
+		upstream:   upstream,
+	}
+	for _, o := range options {
+		o(proxy)
 	}
 	return proxy
 }
 
-func (s *ProxyServer) UseAuthenticator(a Authenticator) {
-	s.authenticator = a
-}
-
-func (s *ProxyServer) UseAuthorizer(a Authorizer) {
-	s.authorizer = a
-}
-
-func (s *ProxyServer) UseDumper(d Dumper) {
-	s.dumper = d
-}
-
-func (s *ProxyServer) UseMqttCreds(mqttUser string, mqttPsw string) {
-	s.mqttCreds = &MqttCreds{
-		user: mqttUser,
-		psw:  mqttPsw,
+func WithAuthenticator(a Authenticator) func(*ProxyServer) {
+	return func(s *ProxyServer) {
+		s.authenticator = a
 	}
 }
 
-func (s *ProxyServer) Start() {
-	listener, err := net.Listen("tcp", s.listen)
+func WithAuthorizer(a Authorizer) func(*ProxyServer) {
+	return func(s *ProxyServer) {
+		s.authorizer = a
+	}
+}
+
+func WithDumper(d Dumper) func(*ProxyServer) {
+	return func(s *ProxyServer) {
+		s.dumper = d
+	}
+}
+
+func WithMqttCreds(mqttUser string, mqttPsw string) func(*ProxyServer) {
+	return func(s *ProxyServer) {
+		s.mqttCreds = &MqttCreds{
+			user: mqttUser,
+			psw:  mqttPsw,
+		}
+	}
+}
+
+func (s *ProxyServer) Start(ctx context.Context) error {
+	lc := net.ListenConfig{}
+	listener, err := lc.Listen(ctx, "tcp", s.downstream)
 	if err != nil {
 		panic(err)
 	}
 
-	for {
-		conn, err := listener.Accept()
+	go func() {
+		<-ctx.Done()
+		err := listener.Close()
 		if err != nil {
 			panic(err)
 		}
+	}()
 
-		go s.serve(conn, s.server)
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				return err
+			}
+		}
+
+		go s.serve(conn, s.upstream)
 	}
 }
 
-// serve a connected MQTT client
 func (s *ProxyServer) serve(dsConn net.Conn, server string) {
 	// подключаемся к нашему брокеру
 	usConn, err := net.Dial("tcp", server)
