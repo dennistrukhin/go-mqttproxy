@@ -104,17 +104,11 @@ func (p *Proxy) ProxifyStream(src net.Conn, dst net.Conn) {
 			break
 		}
 
-		if err != nil {
-			panic(err)
-		}
-
 		err = upstreamWriter.Flush()
 		if err != nil {
 			break
 		}
 	}
-
-	fmt.Println("EoF")
 }
 
 func getBuff(conn net.Conn) (*bytes.Buffer, error) {
