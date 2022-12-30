@@ -214,3 +214,8 @@ func getRL(s int) (int, []byte) {
 	}
 	return l, b
 }
+
+func DecodeMsgType(header byte) MsgType {
+	mType := (header & 0xF0) >> 4
+	return MsgType(mType)
+}
