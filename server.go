@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"log"
 	"net"
 )
 
@@ -52,23 +55,39 @@ func (s *ProxyServer) UseMqttCreds(mqttUser string, mqttPsw string) {
 	}
 }
 
-func (s *ProxyServer) Start() {
-	listener, err := net.Listen("tcp", s.listen)
+func (s *ProxyServer) Start(ctx context.Context) error {
+	lc := net.ListenConfig{}
+	listener, err := lc.Listen(ctx, "tcp", s.listen)
 	if err != nil {
 		panic(err)
 	}
 
+	go func() {
+		<-ctx.Done()
+		log.Println("... shutting service down")
+		err := listener.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			panic(err)
+			select {
+			case <-ctx.Done():
+				fmt.Print("DONE\n")
+				return ctx.Err()
+			default:
+				fmt.Print("ERR\n")
+				return err
+			}
 		}
 
 		go s.serve(conn, s.server)
 	}
 }
 
-// serve a connected MQTT client
 func (s *ProxyServer) serve(dsConn net.Conn, server string) {
 	// подключаемся к нашему брокеру
 	usConn, err := net.Dial("tcp", server)

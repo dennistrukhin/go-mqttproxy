@@ -24,6 +24,10 @@ type Proxy struct {
 	username      string
 }
 
+func getForbiddenMessage() []byte {
+	return []byte{0x20, 0x02, 0x00, 0x05}
+}
+
 func NewProxy(d ProxyDirection, dmp *Dumper, a *Authenticator, au *Authorizer, c *MqttCreds) *Proxy {
 	p := &Proxy{
 		direction:     d,
@@ -178,7 +182,7 @@ func (p *Proxy) processConnect(payload []byte) (bool, *bytes.Buffer, *bytes.Buff
 
 	if !ok {
 		// 20 02 00 05 - отправляем, если не смогли авторизовать пользователя
-		buff.Write([]byte{0x20, 0x02, 0x00, 0x05})
+		buff.Write(getForbiddenMessage())
 		return false, nil, buff
 	}
 
@@ -205,7 +209,7 @@ func (p *Proxy) processSubscribe(payload []byte) (bool, *bytes.Buffer, *bytes.Bu
 	}
 
 	s := NewSubscribe(payload)
-	for _, t := range s.TopicFilers {
+	for _, t := range s.TopicFilters {
 		ok, err := (*(p.authorizer))(p.username, t.Name, SUBSCRIBE)
 		if err != nil {
 			panic(err)
