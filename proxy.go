@@ -62,7 +62,7 @@ func (p *Proxy) ProxifyStream(src net.Conn, dst net.Conn) {
 			(*(p.dumper))(payload)
 		}
 
-		msgType := decodeMsgType(payload[0])
+		msgType := DecodeMsgType(payload[0])
 
 		ok := true
 		rOk := buff
