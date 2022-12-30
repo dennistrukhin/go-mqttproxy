@@ -219,3 +219,28 @@ func DecodeMsgType(header byte) MsgType {
 	mType := (header & 0xF0) >> 4
 	return MsgType(mType)
 }
+
+func MsgTypeName(msgType MsgType) string {
+	name, ok := msgTypeLookup[msgType]
+	if !ok {
+		panic("Тип сообщения не определён")
+	}
+	return name
+}
+
+var msgTypeLookup = map[MsgType]string{
+	CONNECT:     "CONNECT",
+	CONNACK:     "CONNACK",
+	PUBLISH:     "PUBLISH",
+	PUBACK:      "PUBACK",
+	PUBREC:      "PUBREC",
+	PUBREL:      "PUBREL",
+	PUBCOMP:     "PUBCOMP",
+	SUBSCRIBE:   "SUBSCRIBE",
+	SUBACK:      "SUBACK",
+	UNSUBSCRIBE: "UNSUBSCRIBE",
+	UNSUBACK:    "UNSUBACK",
+	PINGREQ:     "PINGREQ",
+	PINGRESP:    "PINGRESP",
+	DISCONNECT:  "DISCONNECT",
+}
