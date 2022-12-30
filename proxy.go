@@ -151,6 +151,9 @@ func getBuff(conn net.Conn) (*bytes.Buffer, error) {
 
 	// теперь вычитываем остаток байтов
 	_, err = io.CopyN(buff, downstreamReader, int64(length))
+	if eofOrPanic(err) {
+		return nil, err
+	}
 
 	return buff, nil
 }

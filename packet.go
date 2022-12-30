@@ -95,7 +95,7 @@ func (cnx *ConnectPacket) GetBytes() []byte {
 		offset += putBytes(&buff, offset, cnx.Username)
 	}
 	if cnx.isPasswordFlag() {
-		offset += putBytes(&buff, offset, cnx.Password)
+		putBytes(&buff, offset, cnx.Password)
 	}
 
 	return buff

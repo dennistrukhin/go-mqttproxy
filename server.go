@@ -90,15 +90,20 @@ func (s *ProxyServer) Start(ctx context.Context) error {
 			}
 		}
 
-		go s.serve(conn, s.upstream)
+		go func() {
+			err := s.serve(conn, s.upstream)
+			if err != nil {
+				panic(err)
+			}
+		}()
 	}
 }
 
-func (s *ProxyServer) serve(dsConn net.Conn, server string) {
+func (s *ProxyServer) serve(dsConn net.Conn, server string) error {
 	// подключаемся к нашему брокеру
 	usConn, err := net.Dial("tcp", server)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer func() {
 		_ = usConn.Close()
@@ -112,5 +117,5 @@ func (s *ProxyServer) serve(dsConn net.Conn, server string) {
 	f := NewProxy(FORWARD, &s.dumper, &s.authenticator, &s.authorizer, s.mqttCreds)
 	f.ProxifyStream(dsConn, usConn)
 
-	err = dsConn.Close()
+	return dsConn.Close()
 }

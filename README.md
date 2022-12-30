@@ -1,5 +1,6 @@
 ## Мутирующий MQTT-proxy
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/dennistrukhin/mqttproxy)](https://goreportcard.com/report/github.com/dennistrukhin/mqttproxy)
 ![test status](https://github.com/dennistrukhin/mqtt-proxy/actions/workflows/test.yml/badge.svg)
 
 ### Описание стандарта
