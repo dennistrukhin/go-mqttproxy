@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"net"
 )
 
@@ -13,8 +11,8 @@ type Mutator func(topic string, payload []byte) (bool, error)
 type Dumper func(b []byte)
 
 type ProxyServer struct {
-	listen        string
-	server        string
+	downstream    string
+	upstream      string
 	authenticator Authenticator
 	authorizer    Authorizer
 	pubMutator    Mutator
@@ -28,43 +26,53 @@ type MqttCreds struct {
 	psw  string
 }
 
-func NewProxyServer(listen string, server string) *ProxyServer {
+func New(downstream string, upstream string, options ...func(*ProxyServer)) *ProxyServer {
 	proxy := &ProxyServer{
-		listen: listen,
-		server: server,
+		downstream: downstream,
+		upstream:   upstream,
+	}
+	for _, o := range options {
+		o(proxy)
 	}
 	return proxy
 }
 
-func (s *ProxyServer) UseAuthenticator(a Authenticator) {
-	s.authenticator = a
+func WithAuthenticator(a Authenticator) func(*ProxyServer) {
+	return func(s *ProxyServer) {
+		s.authenticator = a
+	}
 }
 
-func (s *ProxyServer) UseAuthorizer(a Authorizer) {
-	s.authorizer = a
+func WithAuthorizer(a Authorizer) func(*ProxyServer) {
+	return func(s *ProxyServer) {
+		s.authorizer = a
+	}
 }
 
-func (s *ProxyServer) UseDumper(d Dumper) {
-	s.dumper = d
+func WithDumper(d Dumper) func(*ProxyServer) {
+	return func(s *ProxyServer) {
+		s.dumper = d
+	}
 }
 
-func (s *ProxyServer) UseMqttCreds(mqttUser string, mqttPsw string) {
-	s.mqttCreds = &MqttCreds{
-		user: mqttUser,
-		psw:  mqttPsw,
+func WithMqttCreds(mqttUser string, mqttPsw string) func(*ProxyServer) {
+	return func(s *ProxyServer) {
+		s.mqttCreds = &MqttCreds{
+			user: mqttUser,
+			psw:  mqttPsw,
+		}
 	}
 }
 
 func (s *ProxyServer) Start(ctx context.Context) error {
 	lc := net.ListenConfig{}
-	listener, err := lc.Listen(ctx, "tcp", s.listen)
+	listener, err := lc.Listen(ctx, "tcp", s.downstream)
 	if err != nil {
 		panic(err)
 	}
 
 	go func() {
 		<-ctx.Done()
-		log.Println("... shutting service down")
 		err := listener.Close()
 		if err != nil {
 			panic(err)
@@ -76,15 +84,13 @@ func (s *ProxyServer) Start(ctx context.Context) error {
 		if err != nil {
 			select {
 			case <-ctx.Done():
-				fmt.Print("DONE\n")
 				return ctx.Err()
 			default:
-				fmt.Print("ERR\n")
 				return err
 			}
 		}
 
-		go s.serve(conn, s.server)
+		go s.serve(conn, s.upstream)
 	}
 }
 

@@ -3,17 +3,16 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
 	"strings"
 )
 
-var listen string
+var downstream string
 var upstream string
 
 func setupFlags() {
-	flag.StringVar(&listen, "listen", "localhost:1884", "the MQTT address and port to listen")
+	flag.StringVar(&downstream, "downstream", "localhost:1884", "the MQTT address and port to downstream")
 	flag.StringVar(&upstream, "upstream", "localhost:1883", "the target MQTT server to proxify")
 	flag.Parse()
 }
@@ -36,14 +35,14 @@ func main() {
 
 	go func() {
 		<-quit
-		fmt.Print("QUIT\n")
 		cancel()
 	}()
 
-	proxy := NewProxyServer(listen, upstream)
-	proxy.UseDumper(dumper)
-	proxy.UseAuthenticator(mockAuthenticator)
-	proxy.UseAuthorizer(mockAuthorizer)
-	proxy.UseMqttCreds("user", "pass")
+	proxy := New(downstream, upstream,
+		WithDumper(dumper),
+		WithAuthenticator(mockAuthenticator),
+		WithAuthorizer(mockAuthorizer),
+		WithMqttCreds("user", "pass"),
+	)
 	proxy.Start(ctx)
 }
